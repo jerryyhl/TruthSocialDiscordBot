@@ -119,14 +119,6 @@ class TruthBot(discord.Client):
                                 print(f"⚠️ Failed to download image: HTTP {resp.status}")
                 except Exception as e:
                     print(f"🚨 Image download failed: {str(e)}")
-        #     media = post.get('media_attachments', [])
-        #     image_urls = [m['url'] for m in media if m['type'] == 'image']
-        #     other_media = [m for m in media if m['type'] != 'image']
-
-        #     # Add first image as embed image
-        #     if image_urls:
-        #         print(f"🖼️ Found image URL: {image_urls[0]}")  # Debug log
-        #         embed.set_image(url=image_urls[0])
                 
         #     # Add other media as links
             if media:
