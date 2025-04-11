@@ -7,7 +7,9 @@ import os
 import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
+import aiohttp
+import io
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -72,34 +74,77 @@ class TruthBot(discord.Client):
     async def post_to_discord(self, post):
         try:
             channel = self.get_channel(int(os.getenv("DISCORD_CHANNEL_ID")))
-            
-            # Convert and format timestamps
             post_time = datetime.fromisoformat(post['created_at']).astimezone(PST)
-            time_str = post_time.strftime("%B %d, %Y at %I:%M %p %Z")
             
-            # Remove all HTML tags and format content
-            clean_content = re.sub(r'<[^>]+>', '', post['content'])
-            content = clean_content.replace('\n', '\n\n')  # Preserve paragraph breaks
-            
-            # Build message
-            message = (
-                f"**Latest Truth Social Post from {post['account']['display_name']} @{post['account']['username']}**\n"
-                f"*Posted on {time_str}*\n\n"
-                f"{content}\n\n"
-                f"[View on Truth Social](https://truthsocial.com/@{post['account']['username']}/{post['id']})"
+            # Create base embed
+            embed = discord.Embed(
+                title="📢 New Truth Social Post",
+                description=re.sub(r'<[^>]+>', '', post['content']),
+                color=0x1DA1F2,
+                timestamp=post_time,
+                url=f"https://truthsocial.com/@{post['account']['username']}/{post['id']}"
             )
             
-            # Add media attachments
-            if media := post.get('media_attachments'):
-                media_links = "\n".join([f"📷 {m['url']}" for m in media])
-                message += f"\n\n**Media Attachments:**\n{media_links}"
+            # Add author with profile link
+            embed.set_author(
+                name=f"{post['account']['display_name']} (@{post['account']['username']})",
+                icon_url=post['account']['avatar_static']
+            )
+
+            # Handle media attachments
+            media = post.get('media_attachments', [])
+            image_urls = [m['url'] for m in media if m['type'] == 'image']
+            other_media = [m for m in media if m['type'] != 'image']
+
+            files = []
+            # Add first image as embed image using file attachment
+            if image_urls:
+                try:
+                    image_url = image_urls[0]
+                    print(f"🖼️ Downloading image from: {image_urls[0]}")  # Debug log
+                    
+                    # Download the image
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(image_url) as resp:
+                            if resp.status == 200:
+                                data = io.BytesIO(await resp.read())
+                                
+                                # Create discord.File object
+                                file = discord.File(data, filename="truth_image.png")
+                                files.append(file)
+                                
+                                # Set image using attachment reference
+                                embed.set_image(url="attachment://truth_image.png")
+                            else:
+                                print(f"⚠️ Failed to download image: HTTP {resp.status}")
+                except Exception as e:
+                    print(f"🚨 Image download failed: {str(e)}")
+        #     media = post.get('media_attachments', [])
+        #     image_urls = [m['url'] for m in media if m['type'] == 'image']
+        #     other_media = [m for m in media if m['type'] != 'image']
+
+        #     # Add first image as embed image
+        #     if image_urls:
+        #         print(f"🖼️ Found image URL: {image_urls[0]}")  # Debug log
+        #         embed.set_image(url=image_urls[0])
+                
+        #     # Add other media as links
+            if media:
+                embed.add_field(
+                    name="Attachments",
+                    value="\n".join([f"🔗 {m['url']}" for m in media]),
+                    inline=False
+                )
+
+        #     # Add footer with platform info
+            embed.set_footer(text="Posted on Truth Social")
             
-            await channel.send(message)
-            print(f"📨 Successfully posted to Discord channel {os.getenv('DISCORD_CHANNEL_ID')}")
-            print(f"🔗 Post URL: https://truthsocial.com/@{self.username}/{post['id']}")
+            await channel.send(embed=embed, files=files)
+            print(f"✅ Posted embed with {len(media)} media items")
 
         except Exception as e:
-            print(f"❌ Failed to post to Discord: {str(e)}")
+            print(f"❌ Failed to post embed: {str(e)}")
+            traceback.print_exc()
 
     async def on_ready(self):
         startup_time = datetime.now(PST).strftime('%Y-%m-%d %H:%M:%S %Z')
