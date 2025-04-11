@@ -1,0 +1,5 @@
+discord.py>=2.3
+python-dotenv>=1.0.1  # Updated from 1.0.0 to 1.0.1+
+curl-cffi>=0.7
+tzdata>=2023.3
+git+https://github.com/stanfordio/truthbrush.git
